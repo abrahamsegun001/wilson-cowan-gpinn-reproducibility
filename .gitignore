@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+logs/
+outputs/
+data/processed/*.npz
+synthetic_identifiability_package/synthetic_data/
+synthetic_identifiability_package/synthetic_outputs/
+*.pt
+.DS_Store
