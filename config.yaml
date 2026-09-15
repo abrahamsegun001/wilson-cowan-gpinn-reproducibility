@@ -1,0 +1,114 @@
+version: 1.0.0
+data:
+  processed_dir: data/processed
+  subject_prefix: sub-GC48_ses-day0
+  chunks:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 17
+  - 18
+  - 19
+  fps: 30.0
+  fov_mm: 10.0
+  chunk_duration_s: 30.0
+  working_shape:
+  - 900
+  - 64
+  - 64
+  preprocessing_repository: https://github.com/abrahamsegun001/derivative-aware-widefield
+physics:
+  tau: 1.0
+  w_min: 0.5
+  w_max: 6.0
+model:
+  fourier_dim: 128
+  hidden_neurons: 256
+  hidden_layers: 6
+  scale_xy: 25.0
+  scale_t: 50.0
+selector:
+  nested_folds: 5
+  bootstrap_reps: 1000
+  bootstrap_block_frames: 30
+  min_valid_fraction: 0.9
+  max_standardized_condition: 10.0
+  min_logit_improvement_pct: 0.1
+  min_pde_improvement_pct: 0.1
+  min_positive_fold_fraction: 0.6
+  max_smoothing_relative_range: 1.0
+training:
+  n_data_pool: 60000
+  n_val: 15000
+  n_colloc_pool: 60000
+  n_deriv_pool: 20000
+  data_batch: 4096
+  colloc_batch: 4096
+  deriv_batch: 1024
+  stageA_steps: 2000
+  stageB_steps: 3000
+  lr_stageA: 0.001
+  lr_stageB: 0.0002
+  lbfgs_steps: 150
+  lambda_physics: 0.05
+  lambda_deriv: 0.001
+  mu_grad: 1.0e-05
+  lambda_cont: 0.05
+  continuity_batch: 2048
+  seed: 42
+synthetic:
+  truth:
+    D_E: 0.6
+    w_EE: 5.2
+    h: -2.6
+    tau: 1.0
+    fov_mm: 10.0
+    grid:
+    - 128
+    - 128
+    duration_s: 30.0
+    output_hz: 30.0
+    substeps_per_frame: 4
+  seeds:
+  - 42
+  - 123
+  - 456
+  - 789
+  - 2026
+  noise_sigmas:
+  - 0.0
+  - 0.01
+  fourier_seed: 2718
+  sampling_seed: 31415
+  noise_seed: 1618
+outputs:
+  final: outputs/final_gpinn_pipeline_cont005
+  no_continuity: outputs/final_gpinn_pipeline_nocont
+  independent_validation: outputs/final_dual_model_validation_randomsplit
+  continuity: outputs/continuity_ablation
+  synthetic: synthetic_outputs
+  publication: outputs/publication
+reporting:
+  representative_chunk: 12
+  dpi: 300
+  scatter_points: 100000
+hpc:
+  account: CHANGE_ME
+  time_train: '24:00:00'
+  cpus: 8
+  memory: 48G
+  gpu: a100:1

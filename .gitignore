@@ -6,8 +6,8 @@ venv/
 .env
 logs/
 outputs/
-data/processed/*.npz
-synthetic_identifiability_package/synthetic_data/
-synthetic_identifiability_package/synthetic_outputs/
+data/processed/
 *.pt
+*.pth
+*.npz
 .DS_Store

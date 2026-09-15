@@ -1,138 +1,157 @@
 # Regression-assisted, model-selective sequential Wilson-Cowan gPINN
 
-Reproducibility package for the manuscript **Regression-Assisted, Model-Selective Gradient-Enhanced Physics-Informed Neural Networks for Interpretable Sequential Wilson-Cowan Inference from Widefield Calcium Imaging**.
+Compact reproducibility repository for **Regression-Assisted, Model-Selective Gradient-Enhanced Physics-Informed Neural Networks for Interpretable Sequential Wilson-Cowan Inference from Widefield Calcium Imaging**.
 
-## What is in this repository
+Repository: **https://github.com/abrahamsegun001/wilson-cowan-gpinn-reproducibility**
 
-The canonical production implementation is:
+The public interface has intentionally been reduced from the original development archive to one configuration file, one Python entry point, one SLURM entry point, and six focused source modules. Historical `v1/v2/final` scripts and dozens of one-off job files are not part of this release.
 
-```text
-train_gpinn_narval_final.py
-```
-
-For each 30-second calcium-imaging chunk it estimates pseudo-derivatives, fits full and nested reduced Wilson-Cowan regressions, applies the pre-specified model-selection criteria, fixes the selected physical coefficients, trains the neural-state gPINN, and sequentially warm-starts only the neural representation. The physical coefficients and optimizer state are re-estimated/reset for each chunk. Continuity regularization uses `lambda_cont=0.05` from chunk 1 onward.
-
-The package also contains the synthetic twin experiments, derivative diagnostics, smoothing calibration, selector controls, real-data audits, continuity ablation, publication tables/figures, SLURM scripts, and static manuscript figures.
-
-## Repository map
+## Repository structure
 
 ```text
-train_gpinn_narval_final.py        canonical final real-data trainer
-job_gpinn_narval_final_cont005.sh  final 20-chunk Narval job
-job_gpinn_narval_final_no_continuity.sh  matched no-continuity run
-synthetic_identifiability_package/ baseline synthetic twin experiment
-diagnose_derivatives.py            learned derivative diagnostic
-train_synthetic_*                  synthetic recovery controls
-sweep_pseudoderiv_regression.py    noise/smoothing sweep
-synthetic_model_selection_control.py final selector positive/null control
-real_calcium_*                     real-data regression/uncertainty audits
-continuity_ablation.py             continuity-weight ablation
-extract_publication_results_v2.py  publication master-data extraction
-make_publication_*                 tables and figures
-reproduce_publication_assets.sh    rebuild publication assets from completed runs
-figures/                            static manuscript figure snapshot
-data/README.md                      processed-data interface
-docs/                               detailed reproducibility notes
+wilson-cowan-gpinn/
+├── README.md
+├── LICENSE
+├── CITATION.cff
+├── .gitignore
+├── environment.yml
+├── config.yaml
+├── run_pipeline.py
+├── submit_pipeline.sh
+├── data/README.md
+└── src/
+    ├── __init__.py
+    ├── training.py       # canonical final real-data trainer
+    ├── model.py          # baseline synthetic gPINN core
+    ├── synthetic.py      # synthetic twin + recovery/selector controls
+    ├── diagnostics.py    # real-data audits, independent validation, continuity
+    ├── reporting.py      # publication master data, tables, figures
+    └── utils.py
 ```
 
-## Environment
+## Data and preprocessing
 
-The production jobs used Python 3.10 and a CUDA-enabled PyTorch environment. Create a basic environment with either:
+Raw BraiDyn-BC data are available from DANDI accession **001425**. Exact raw-to-chunk preprocessing is maintained in the companion repository:
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_environment.py
+**https://github.com/abrahamsegun001/derivative-aware-widefield**
+
+This modelling repository expects twenty processed files such as:
+
+```text
+data/processed/sub-GC48_ses-day0_chunk-00_dfof.npz
+...
+data/processed/sub-GC48_ses-day0_chunk-19_dfof.npz
 ```
 
-or:
+Each contains `dfof[time,y,x]`; the manuscript configuration is `900 x 64 x 64` at 30 Hz.
+
+## Installation
 
 ```bash
 conda env create -f environment.yml
 conda activate wc-gpinn
+python run_pipeline.py verify
 ```
 
-For GPU training, install the PyTorch build appropriate for the CUDA stack on your system.
+Install the PyTorch build appropriate for your CUDA stack when running GPU training.
 
-## Data
+## Main analysis
 
-The model expects 20 processed NPZ chunks under `data/processed/`:
+The canonical final method is `src/training.py`, consolidated from the validated final trainer. For each 30-s chunk it estimates resolution-aware pseudo-derivatives, fits full and nested reduced Wilson-Cowan regressions, applies model-selection criteria, fixes the selected physical coefficients, trains the neural-state gPINN, and warm-starts only the neural representation. Physical coefficients and optimizer state are reset/re-estimated for each chunk.
 
-```text
-sub-GC48_ses-day0_chunk-00_dfof.npz
-...
-sub-GC48_ses-day0_chunk-19_dfof.npz
-```
-
-Each contains `dfof` with axes `[time,y,x]`; the manuscript working shape is `900 x 64 x 64`. Validate the files before training:
+Run the manuscript configuration:
 
 ```bash
-python scripts/validate_processed_data.py --data_dir data/processed
+python run_pipeline.py train
 ```
 
-The source recording is BraiDyn-BC, DANDI accession 001425, session `sub-VG1-GC#48_ses-2023-08-18-resting-state-day0_widefield+behavior.nwb`. See `docs/DATA_AND_PREPROCESSING.md` for the exact preprocessing specification and the explicit raw-to-processed code availability note.
-
-## Run the final pipeline
-
-A quick one-chunk execution is:
+Matched no-continuity run:
 
 ```bash
-python train_gpinn_narval_final.py \
-  --data_dir data/processed \
-  --output_dir outputs/smoke_real \
-  --chunks 0 \
-  --num_chunks_for_scaling 20 \
-  --seed 42
+python run_pipeline.py train --no-continuity
 ```
 
-For the full manuscript configuration on Narval:
+Validate processed inputs:
 
 ```bash
-sbatch job_gpinn_narval_final_cont005.sh
+python run_pipeline.py validate-data
 ```
 
-Primary final outputs are:
+## Synthetic controls
 
-```text
-final_pipeline_results.csv
-final_pipeline_summary.json
-checkpoints/
-histories/
-model_selection_details/
-```
-
-The final training configuration uses 60,000 state-training points, 15,000 random-pointwise validation points, 60,000 collocation points, 20,000 pseudo-derivative points, Stage A 2000 Adam steps, Stage B 3000 Adam steps, and 150 L-BFGS iterations. Validation is spatiotemporal interpolation, not forecasting.
-
-## Synthetic twin experiment
-
-The independent finite-difference + RK4 synthetic experiment is contained in `synthetic_identifiability_package/`. On Narval:
+All former synthetic scripts are namespaced under one module:
 
 ```bash
-cd synthetic_identifiability_package
-bash submit_synthetic_pipeline.sh
+python run_pipeline.py synthetic generate
+python run_pipeline.py synthetic baseline --help
+python run_pipeline.py synthetic oracle --help
+python run_pipeline.py synthetic staged --help
+python run_pipeline.py synthetic pseudoderiv --help
+python run_pipeline.py synthetic sweep --help
+python run_pipeline.py synthetic aggregate-sweep --help
+python run_pipeline.py synthetic selector --help
 ```
 
-The known synthetic truth is `D_E=0.60`, `w_EE=5.20`, `h=-2.60`. Supporting control scripts at repository root reproduce the derivative, oracle, staged, pseudo-derivative, smoothing, and selector analyses used in the manuscript.
+Known synthetic truth in `config.yaml`: `D_E=0.60`, `w_EE=5.20`, `h=-2.60`, `tau=1 s`.
 
-## Publication assets
-
-After the required final, no-continuity, continuity-ablation, and synthetic outputs exist, rebuild tables and figures with:
+## Diagnostics and ablations
 
 ```bash
-bash reproduce_publication_assets.sh
+python run_pipeline.py diagnostics independent --help
+python run_pipeline.py diagnostics continuity --help
+python run_pipeline.py diagnostics aggregate-continuity --help
+python run_pipeline.py diagnostics derivatives --help
+python run_pipeline.py diagnostics d-bound --help
+python run_pipeline.py diagnostics regression --help
+python run_pipeline.py diagnostics uncertainty --help
 ```
 
-See `docs/MANUSCRIPT_TO_CODE_MAP.md` for the source of each manuscript analysis.
+`independent` is the random-pointwise cold/independent reference used for matched sequential comparisons. The resolution-aware regression audit supersedes the earlier fixed-pixel audit.
 
-## Reproducibility boundary
+## Publication outputs
 
-The canonical final model is self-contained **from the processed NPZ chunks onward**. The exact original raw-NWB extraction/affine-resampling script was not present among the source files supplied when this archive was assembled, so it has not been fabricated. The preprocessing algorithm is documented in `docs/DATA_AND_PREPROCESSING.md`, and the missing raw-to-chunk implementation is the only known code-stage gap in the assembled release.
+Once the completed training/control outputs are available:
+
+```bash
+python run_pipeline.py report all
+```
+
+This extracts one master numerical source, renders manuscript tables, generates Figures 1–5, and applies the final Figure 1/Figure 4/S1 layout. Figures and tables are generated under `outputs/` and are intentionally not committed.
+
+## HPC / Narval
+
+Set your account and project root, then use the single launcher:
+
+```bash
+export SLURM_ACCOUNT=your-account
+export PROJECT_ROOT=$HOME/scratch/gpinn_project
+./submit_pipeline.sh train
+./submit_pipeline.sh report
+```
+
+Cluster-specific account/module details are deliberately kept out of the scientific source.
+
+## Manuscript-to-command map
+
+| Manuscript component | Compact command/source |
+|---|---|
+| Final sequential gPINN | `run_pipeline.py train` / `src/training.py` |
+| Baseline synthetic twin | `synthetic generate`, `synthetic baseline`, `synthetic plot` |
+| Learned derivative diagnostic | `diagnostics derivatives` |
+| Oracle / staged / pseudo-derivative controls | `synthetic oracle`, `staged`, `pseudoderiv` |
+| Noise/smoothing calibration | `synthetic sweep`, `aggregate-sweep` |
+| Selector positive/null control | `synthetic selector` |
+| Real lower-bound audit | `diagnostics d-bound` |
+| Resolution-aware regression audit | `diagnostics regression` |
+| Nested uncertainty audit | `diagnostics uncertainty` |
+| Independent/cold matched reference | `diagnostics independent` |
+| Continuity ablation | `diagnostics continuity`, `aggregate-continuity` |
+| Tables and figures | `report all` |
 
 ## Scientific interpretation
 
-`D_E` is an effective Laplacian spatial-coupling coefficient in the reduced Wilson-Cowan formulation, not a directly calibrated biological tissue diffusion constant. A reduced-model selection indicates lack of stable support for the isotropic Laplacian term under the stated data, scales, preprocessing, and selection criteria; it does not establish absence of cortical spatial coupling.
+`D_E` is an effective isotropic Laplacian spatial-coupling coefficient in the reduced Wilson-Cowan formulation, not a directly calibrated biological tissue diffusion constant. Selection of a reduced `D_E=0` model means that the Laplacian term lacks stable support under the stated data, preprocessing, scales, and selection criteria. It does not establish absence of cortical spatial coupling.
 
-## License
+## License and citation
 
-No software license has been assigned in this archive. Before making the GitHub repository public, choose and add an appropriate software license so that downstream reuse terms are explicit.
+Released under the BSD 3-Clause License. If this software contributes to academic work, please cite the associated manuscript and repository; `CITATION.cff` is provided for GitHub citation support.
